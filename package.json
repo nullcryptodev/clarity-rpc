@@ -1,0 +1,71 @@
+{
+  "name": "@claritychain/rpc",
+  "version": "0.2.0",
+  "description": "TypeScript client, builder, and tooling for the Clarity (CLRTY) JSON-RPC node",
+  "license": "MIT",
+  "author": "nullcryptodev",
+  "homepage": "https://github.com/nullcryptodev/clarity-rpc",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nullcryptodev/clarity-rpc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nullcryptodev/clarity-rpc/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "keywords": [
+    "clarity",
+    "clrty",
+    "rpc",
+    "blockchain",
+    "crypto",
+    "json-rpc"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist coverage *.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "tsx scripts/smoke.ts",
+    "prepublishOnly": "npm run clean && npm run build && npm run test"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "peerDependencies": {
+    "ws": "^8.16.0"
+  },
+  "peerDependenciesMeta": {
+    "ws": {
+      "optional": true
+    }
+  }
+}
