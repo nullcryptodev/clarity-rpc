@@ -1,8 +1,38 @@
 import { describe, expect, it } from "vitest";
 import { TxBuilder, UnsignedTx } from "../builder.js";
 
-const FROM = "clrty1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
-const TO = "clrty1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
+//  A valid bech32m address must have exactly 52 data characters
+//  after the `1` separator. This helper produces one from a 32-byte
+//  body, so the tests never have to construct (or retype) an address
+//  by hand.
+function makeTestAddress(
+  hrp: "clrty" | "tclrty" | "rclrty",
+  body: Uint8Array = new Uint8Array(32),
+): string {
+  if (body.length !== 32) throw new Error("body must be 32 bytes");
+  const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+  const words: number[] = [];
+  let acc = 0;
+  let bits = 0;
+  for (const b of body) {
+    acc = (acc << 8) | b;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      words.push((acc >> bits) & 0x1f);
+    }
+  }
+  if (bits > 0) words.push((acc << (5 - bits)) & 0x1f);
+  while (words.length < 52) words.push(0);
+  if (words.length !== 52) {
+    throw new Error(`expected 52 words, got ${words.length}`);
+  }
+  const data = words.concat([0, 0, 0, 0, 0, 0]);
+  return hrp + "1" + data.map((w) => CHARSET[w]).join("");
+}
+
+const FROM = makeTestAddress("rclrty");
+const TO = makeTestAddress("rclrty", new Uint8Array(32).fill(0x11));
 
 describe("TxBuilder.transfer", () => {
   it("produces an UnsignedTx with the right type name", () => {
@@ -12,7 +42,7 @@ describe("TxBuilder.transfer", () => {
       amount: BigInt(1_000_000),
       fee: BigInt(1_000),
       nonce: BigInt(0),
-      chainId: BigInt(0x434c5254),
+      chainId: BigInt(0x434c5247),
     });
     expect(tx).toBeInstanceOf(UnsignedTx);
     expect(tx.typeName).toBe("transfer");
@@ -30,12 +60,12 @@ describe("TxBuilder.transfer", () => {
     expect(a.toHex()).toBe(b.toHex());
   });
 
-  it("signing hash is 32 bytes", async () => {
+  it("signing hash is 32 bytes", () => {
     const tx = TxBuilder.transfer({
       from: FROM, to: TO, amount: BigInt(1), fee: BigInt(1),
       nonce: BigInt(0), chainId: BigInt(1),
     });
-    const h = await tx.signingHash();
+    const h = tx.signingHash(); // sync in the corrected builder
     expect(h.length).toBe(32);
   });
 
@@ -73,6 +103,7 @@ describe("TxBuilder AMM", () => {
   const base = {
     from: FROM, fee: BigInt(1), nonce: BigInt(0), chainId: BigInt(1),
   };
+
   it("builds createPool", () => {
     const tx = TxBuilder.createPool({
       ...base, tokenA: BigInt(0), tokenB: BigInt(1),
@@ -80,12 +111,37 @@ describe("TxBuilder AMM", () => {
     });
     expect(tx.typeName).toBe("create_pool");
   });
+
   it("builds swap", () => {
     const tx = TxBuilder.swap({
-      ...base, poolId: BigInt(1), sellToken: BigInt(0),
-      sellAmount: BigInt(100), minBuyAmount: BigInt(90),
+      ...base,
+      poolId: BigInt(1),
+      tokenIn: BigInt(0),
+      amountIn: BigInt(100),
+      minAmountOut: BigInt(90),
+      to: TO,
     });
     expect(tx.typeName).toBe("swap");
+  });
+
+  it("builds addLiquidity", () => {
+    const tx = TxBuilder.addLiquidity({
+      ...base,
+      poolId: BigInt(1),
+      tokenIn: BigInt(0),
+      amountIn: BigInt(100),
+      amountOther: BigInt(200),
+    });
+    expect(tx.typeName).toBe("add_liquidity");
+  });
+
+  it("builds removeLiquidity", () => {
+    const tx = TxBuilder.removeLiquidity({
+      ...base,
+      positionId: BigInt(1),
+      amount: BigInt(50),
+    });
+    expect(tx.typeName).toBe("remove_liquidity");
   });
 });
 
@@ -93,26 +149,40 @@ describe("TxBuilder validator", () => {
   const base = {
     from: FROM, fee: BigInt(1), nonce: BigInt(0), chainId: BigInt(1),
   };
-  it("rejects short consensus keys", () => {
+
+  it("rejects short node keys", () => {
     expect(() =>
       TxBuilder.registerValidator({
         ...base,
-        consensusKey: new Uint8Array(16),
-        nodeKey: new Uint8Array(32),
-        rewardAddress: TO,
+        nodeKey: new Uint8Array(16),
         stake: BigInt(1),
       }),
     ).toThrow();
   });
+
   it("accepts 32-byte keys", () => {
     const tx = TxBuilder.registerValidator({
       ...base,
-      consensusKey: new Uint8Array(32),
       nodeKey: new Uint8Array(32),
-      rewardAddress: TO,
       stake: BigInt(1),
     });
     expect(tx.typeName).toBe("register_validator");
+  });
+
+  it("builds updateRewardAddress", () => {
+    const tx = TxBuilder.updateRewardAddress({
+      ...base,
+      newRewardAddress: TO,
+    });
+    expect(tx.typeName).toBe("update_reward_address");
+  });
+
+  it("builds rotateConsensusKey", () => {
+    const tx = TxBuilder.rotateConsensusKey({
+      ...base,
+      newConsensusKey: new Uint8Array(32),
+    });
+    expect(tx.typeName).toBe("rotate_consensus_key");
   });
 });
 
@@ -120,14 +190,52 @@ describe("TxBuilder orders", () => {
   const base = {
     from: FROM, fee: BigInt(1), nonce: BigInt(0), chainId: BigInt(1),
   };
-  it("builds createOrder with the right mode byte", () => {
+
+  it("builds a passive order with the right mode byte", () => {
     const tx = TxBuilder.createOrder({
-      ...base, sellToken: BigInt(0), buyToken: BigInt(1),
-      sellAmount: BigInt(100), minBuyAmount: BigInt(90),
-      mode: "active", expiresAtHeight: BigInt(1000),
+      ...base,
+      sellToken: BigInt(0),
+      buyToken: BigInt(1),
+      sellAmount: BigInt(100),
+      minBuyAmount: BigInt(90),
+      mode: "passive",
+      poolId: BigInt(0),
+      expiresAtHeight: BigInt(1000),
     });
     expect(tx.typeName).toBe("create_order");
   });
+
+  it("builds an active order with a pool id", () => {
+    const tx = TxBuilder.createOrder({
+      ...base,
+      sellToken: BigInt(0),
+      buyToken: BigInt(1),
+      sellAmount: BigInt(100),
+      minBuyAmount: BigInt(90),
+      mode: "active",
+      poolId: BigInt(7),
+      expiresAtHeight: BigInt(1000),
+    });
+    expect(tx.typeName).toBe("create_order");
+  });
+
+  it("builds an order with conditions", () => {
+    const tx = TxBuilder.createOrder({
+      ...base,
+      sellToken: BigInt(0),
+      buyToken: BigInt(1),
+      sellAmount: BigInt(100),
+      minBuyAmount: BigInt(90),
+      mode: "passive",
+      poolId: BigInt(0),
+      expiresAtHeight: BigInt(1000),
+      conditions: [
+        { type: "expires_at_height", param1: BigInt(500), param2: 0 },
+      ],
+    });
+    expect(tx.typeName).toBe("create_order");
+  });
+
   it("builds cancelOrder", () => {
     const tx = TxBuilder.cancelOrder({ ...base, orderId: BigInt(1) });
     expect(tx.typeName).toBe("cancel_order");
@@ -138,19 +246,46 @@ describe("TxBuilder tokens", () => {
   const base = {
     from: FROM, fee: BigInt(1), nonce: BigInt(0), chainId: BigInt(1),
   };
+
   it("builds createToken", () => {
     const tx = TxBuilder.createToken({
-      ...base, name: "Test", symbol: "TST", decimals: 5,
-      maxSupply: BigInt(1_000_000), backing: "unbacked", royaltyBps: 0,
+      ...base,
+      name: "Test",
+      symbol: "TST",
+      decimals: 5,
+      maxSupply: BigInt(1_000_000),
+      backing: 0,
+      royaltyBps: 0,
     });
     expect(tx.typeName).toBe("create_token");
   });
-  it("builds mintToken", () => {
-    const tx = TxBuilder.mintToken({ ...base, tokenId: BigInt(1), amount: BigInt(100) });
+
+  it("builds mintToken with a recipient", () => {
+    const tx = TxBuilder.mintToken({
+      ...base,
+      tokenId: BigInt(1),
+      to: TO,
+      amount: BigInt(100),
+    });
     expect(tx.typeName).toBe("mint_token");
   });
+
   it("builds burnToken", () => {
-    const tx = TxBuilder.burnToken({ ...base, tokenId: BigInt(1), amount: BigInt(100) });
+    const tx = TxBuilder.burnToken({
+      ...base,
+      tokenId: BigInt(1),
+      amount: BigInt(100),
+    });
     expect(tx.typeName).toBe("burn_token");
+  });
+
+  it("builds updateTokenMeta", () => {
+    const tx = TxBuilder.updateTokenMeta({
+      ...base,
+      tokenId: BigInt(1),
+      newName: "New Name",
+      newSymbol: "NEW",
+    });
+    expect(tx.typeName).toBe("update_token_meta");
   });
 });

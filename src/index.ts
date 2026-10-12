@@ -107,6 +107,93 @@ export type {
   SignerFn,
 } from "./builder.js";
 
+// DEX
+export {
+  parsePool,
+  parsePosition,
+  parseOrder,
+  parseOrderBook,
+  parseFill,
+} from "./dex-types.js";
+export type {
+  DexPool,
+  DexPosition,
+  DexOrder,
+  DexOrderMode,
+  DexOrderCondition,
+  DexOrderConditionType,
+  DexOrderBook,
+  DexOrderBookLevel,
+  DexFill,
+} from "./dex-types.js";
+
+export {
+  BOOK_PRICE_SCALE,
+  spotPriceScaled,
+  canonicalReserves,
+  computeSwapOutput,
+  swapOutputForPool,
+  computeEffectivePrice,
+  lpTokensForDeposit,
+  reservesForRemoval,
+  lpShareBps,
+  applySlippage,
+  formatPrice,
+} from "./dex-maths.js";
+
+export { DexClient } from "./dex-client.js";
+export type {
+  Page,
+  PoolPage,
+  PositionPage,
+  OrderPage,
+  FillPage,
+  TradePage,
+} from "./dex-client.js";
+export {
+  bestPoolForSwap,
+  counterpartToken,
+  quoteSwap,
+  quoteAddLiquidity,
+  quoteRemoveLiquidity,
+  formatPool,
+  formatPosition,
+  formatOrder,
+  formatTokenAmount,
+  aggregateOrderBook,
+  midPrice,
+} from "./dex-helpers.js";
+export type {
+  BestPoolResult,
+  SwapQuote,
+  AddLiquidityQuote,
+  RemoveLiquidityQuote,
+  PoolDisplay,
+  PositionDisplay,
+  OrderDisplay,
+  AggregatedBookLevel,
+  AggregatedBook,
+} from "./dex-helpers.js";
+
+// DEX write path
+export {
+  submitSwap,
+  submitAddLiquidity,
+  submitRemoveLiquidity,
+  submitCreatePool,
+} from "./dex-writer.js";
+export type {
+  WriteOptions,
+  SubmitOptions,
+  SubmitResult,
+  ReceiptSummary,
+  SwapArgs,
+  SwapArgsWithSlippage,
+  AddLiquidityArgs,
+  RemoveLiquidityArgs,
+  CreatePoolArgs,
+} from "./dex-writer.js";
+
 // Proofs
 export { verifyProof, decodeProof } from "./proof.js";
 export type { VerifyProofOptions } from "./proof.js";
