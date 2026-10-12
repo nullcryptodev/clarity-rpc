@@ -6,8 +6,12 @@
 
 import type {
   Bech32mAddress,
+  Fill,
   HashHex,
   HexString,
+  NftCollection,
+  NftInfo,
+  OrderBook,
   Transaction,
   Validator,
 } from "./types.js";
@@ -349,4 +353,44 @@ export interface MempoolListResponse {
 export interface PeersResponse {
   count: HexString;
   peers: import("./types.js").Peer[];
+}
+
+// --------------------------------------------------------------- NFTs
+
+export interface NftForOwnerResponse {
+  address: Bech32mAddress;
+  count: HexString;
+  offset: HexString;
+  limit: HexString;
+  nfts: NftInfo[];
+}
+
+export interface NftsForCollectionResponse {
+  collection_id: HexString;
+  count: HexString;
+  offset: HexString;
+  limit: HexString;
+  nfts: NftInfo[];
+}
+
+export interface AllCollectionsResponse {
+  count: HexString;
+  offset: HexString;
+  limit: HexString;
+  collections: NftCollection[];
+}
+
+// --------------------------------------------------------------- Order book
+
+export interface OrderFillsResponse {
+  order_id: HexString;
+  count: HexString;
+  fills: Fill[];
+}
+
+export interface PairTradesResponse {
+  base_token: HexString;
+  quote_token: HexString;
+  count: HexString;
+  trades: Fill[];
 }

@@ -26,6 +26,15 @@ export const TX_TYPE_LABELS: Record<string, string> = {
   block_reward: "Block Reward",
   order_expired: "Order Expired",
   slash: "Slash",
+  create_nft_collection: "Create NFT Collection",
+  mint_nft: "Mint NFT",
+  wrap_nft: "Wrap NFT",
+  transfer_nft: "Transfer NFT",
+  burn_nft: "Burn NFT",
+  update_nft_metadata: "Update NFT Metadata",
+  top_up_nft: "Top Up NFT",
+  claim_nft_reward: "Claim NFT Reward",
+  refill_collection_reward: "Refill Collection Reward",
 };
 
 export function humanTypeName(t: string): string {

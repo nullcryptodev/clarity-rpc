@@ -83,3 +83,63 @@ export function networkNameFromChainId(chainId: number | HexString): string {
       return `Chain 0x${id.toString(16)}`;
   }
 }
+
+/**
+ * NFTs have zero decimals by construction (each is a shadow token with
+ * maxSupply 1). The shadow token's balance is therefore either 0 or 1;
+ * it is displayed as a whole count, not a fractional amount.
+ */
+export function formatNftAmount(raw: HexString): string {
+  return hexToBigInt(raw).toString();
+}
+
+/**
+ * A collection's reward rate is in atomic units of the reward token per
+ * epoch. Format it in the reward token's decimals, not CLRTY's, when
+ * you know what token that is.
+ */
+export function formatRewardRate(
+  raw: HexString,
+  rewardTokenDecimals: number,
+): string {
+  const v = hexToBigInt(raw);
+  const scale = BigInt(10) ** BigInt(rewardTokenDecimals);
+  const whole = v / scale;
+  const frac = v % scale;
+  if (frac === BigInt(0)) return whole.toLocaleString();
+  const fracStr = frac
+    .toString()
+    .padStart(rewardTokenDecimals, "0")
+    .replace(/0+$/, "");
+  return fracStr.length === 0
+    ? whole.toLocaleString()
+    : `${whole.toLocaleString()}.${fracStr}`;
+}
+
+/**
+ * The order book's `price` is scaled by BOOK_PRICE_SCALE. Callers who
+ * want a human ratio should pass the scale in; there's no default
+ * because the scale is a chain constant the client shouldn't hardcode.
+ */
+export function formatPrice(
+  raw: HexString,
+  priceScale: HexString,
+  maxFrac = 8,
+): string {
+  const p = hexToBigInt(raw);
+  const s = hexToBigInt(priceScale);
+  if (s === BigInt(0)) return "0";
+  // Compute p / s with maxFrac digits of precision.
+  const scaleOut = BigInt(10) ** BigInt(maxFrac);
+  const scaled = (p * scaleOut) / s;
+  const whole = scaled / scaleOut;
+  const frac = scaled % scaleOut;
+  if (frac === BigInt(0)) return whole.toLocaleString();
+  const fracStr = frac
+    .toString()
+    .padStart(maxFrac, "0")
+    .replace(/0+$/, "");
+  return fracStr.length === 0
+    ? whole.toLocaleString()
+    : `${whole.toLocaleString()}.${fracStr}`;
+}

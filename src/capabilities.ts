@@ -38,11 +38,18 @@ const FALLBACK_METHODS: Record<string, string[]> = {
     "getTokenInfo", "getTokenSupply", "getAllTokens", "getTokenHolders",
     "getTokenTransfers", "getTokensByCreator",
   ],
+  nfts: [
+    "getNft", "getNftsForOwner", "getNftsForCollection",
+    "getCollection", "getAllCollections",
+  ],
   amm: [
     "getPool", "getPosition", "getPositionByOwner", "getAllPools",
     "getPoolsForToken", "getPositionsForPool",
   ],
-  orders: ["getOrder", "getOrdersExpiringAt", "getAllOrders", "getOrdersByPair"],
+  orders: [
+    "getOrder", "getOrdersExpiringAt", "getAllOrders", "getOrdersByPair",
+    "getOrderBook", "getOrderFills", "getPairTrades",
+  ],
   transactions: [
     "sendRawTransaction", "getTransactionByHash", "getTransactionReceipt",
     "simulateTransaction", "getRecentTransactions", "getAllTransactions",

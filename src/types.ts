@@ -307,3 +307,87 @@ export interface ProofResponse {
   version: HexString;
   proof?: HexString;
 }
+
+// --------------------------------------------------------------- NFT
+
+/**
+ * An NFT. Every NFT is also a token (maxSupply 1, decimals 0), so the
+ * DEX, AMM, and reward layer see it as an ordinary token of that
+ * shape. The `shadow_token_id` is that token's id.
+ */
+export interface NftInfo {
+  id: HexString;
+  owner: Bech32mAddress;
+  creator: Bech32mAddress;
+  shadow_token_id: HexString;
+  /** "0x0" for a standalone NFT. */
+  underlying_token_id: HexString;
+  /** "0x0" for a standalone NFT. */
+  wrapped_amount: HexString;
+  /** "0x0" for an NFT that is not in a collection. */
+  collection_id: HexString;
+  metadata_hash: HashHex | null;
+  metadata_uri: string;
+  frozen: boolean;
+  last_accrual_height: HexString;
+  /**
+   * Accrued but unclaimed reward, in atomic units of the collection's
+   * reward token. Settled into the owner's `pending_rewards` account
+   * field by the epoch-boundary processor; claimed via the standard
+   * `claim_rewards` transaction, which clears `pending_rewards`
+   * regardless of whether the accrual was staker or NFT.
+   */
+  accrued_owed: HexString;
+  created_at_height: HexString;
+  /** Present only when the NFT is wrapped. */
+  custody_address?: Bech32mAddress;
+}
+
+export interface NftCollection {
+  id: HexString;
+  creator: Bech32mAddress;
+  name: string;
+  symbol: string;
+  base_uri: string;
+  /** "0x0" for a collection with no reward schedule. */
+  reward_token_id: HexString;
+  reward_rate_per_epoch: HexString;
+  reward_escrow_remaining: HexString;
+  reward_paused: boolean;
+  created_at_height: HexString;
+  minted_count: HexString;
+  /** Present only when the collection has a reward schedule. */
+  escrow_address?: Bech32mAddress;
+}
+
+// --------------------------------------------------------------- Order book
+
+export interface OrderBookLevel {
+  price: HexString;
+  total_base: HexString;
+  order_count: HexString;
+}
+
+export interface OrderBook {
+  base_token: HexString;
+  quote_token: HexString;
+  /** The canonical-price scale. See `formatPrice`. */
+  price_scale: HexString;
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+}
+
+export interface Fill {
+  source: "limit" | "amm";
+  source_code: number;
+  maker_order_id: HexString;
+  taker_order_id: HexString;
+  pool_id: HexString;
+  base_token: HexString;
+  quote_token: HexString;
+  qty_base: HexString;
+  qty_quote: HexString;
+  price: HexString;
+  height: HexString;
+  tx_index_in_block: number;
+}

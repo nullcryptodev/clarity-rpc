@@ -20,8 +20,11 @@ import type {
   HashHex,
   HexString,
   MempoolStats,
+  NftCollection,
+  NftInfo,
   NodeStatus,
   Order,
+  OrderBook,
   ProofResponse,
   Receipt,
   TokenInfo,
@@ -29,9 +32,11 @@ import type {
   TransactionWithLocation,
   Validator,
 } from "./types.js";
+
 import type {
   AddressListResponse,
   AddressStats,
+  AllCollectionsResponse,
   AllOrdersResponse,
   AllPoolsResponse,
   AllTokensResponse,
@@ -45,8 +50,12 @@ import type {
   FeeStats,
   HealthResponse,
   MempoolListResponse,
+  NftForOwnerResponse,
+  NftsForCollectionResponse,
+  OrderFillsResponse,
   OrdersByPairResponse,
   OrdersExpiringAtResponse,
+  PairTradesResponse,
   PeersResponse,
   PoolsForTokenResponse,
   PositionsForPoolResponse,
@@ -352,6 +361,10 @@ export class RpcClient {
     });
   }
 
+  getTxCount(): Promise<TxCount> {
+    return this.call("getTxCount");
+  }
+
   getAllTransactions(
     limit = 50,
     typeCode?: number,
@@ -367,13 +380,9 @@ export class RpcClient {
     limit = 50,
   ): Promise<RecentTransactionsResponse> {
     return this.call("getTransactionsByType", {
-      type_code: typeCode,
+      type_code: toHexParam(typeCode),
       limit,
     });
-  }
-
-  getTxCount(): Promise<TxCount> {
-    return this.call("getTxCount");
   }
 
   // ============================================================== Mempool
@@ -504,6 +513,74 @@ export class RpcClient {
       limit,
       offset,
     });
+  }
+
+  getOrderBook(
+    baseToken: HexString,
+    quoteToken: HexString,
+    depth = 20,
+  ): Promise<OrderBook> {
+    return this.call("getOrderBook", {
+      base_token: baseToken,
+      quote_token: quoteToken,
+      depth,
+    });
+  }
+
+  getOrderFills(
+    orderId: HexString,
+    limit = 100,
+  ): Promise<OrderFillsResponse> {
+    return this.call("getOrderFills", { order_id: orderId, limit });
+  }
+
+  getPairTrades(
+    baseToken: HexString,
+    quoteToken: HexString,
+    limit = 100,
+  ): Promise<PairTradesResponse> {
+    return this.call("getPairTrades", {
+      base_token: baseToken,
+      quote_token: quoteToken,
+      limit,
+    });
+  }
+
+  // ============================================================== NFTs
+
+  getNft(nftId: HexString): Promise<NftInfo> {
+    return this.call("getNft", { nft_id: nftId });
+  }
+
+  getNftsForOwner(
+    address: Bech32mAddress,
+    limit = 50,
+    offset = 0,
+  ): Promise<NftForOwnerResponse> {
+    return this.call("getNftsForOwner", { address, limit, offset });
+  }
+
+  getNftsForCollection(
+    collectionId: HexString,
+    limit = 50,
+    offset = 0,
+  ): Promise<NftsForCollectionResponse> {
+    return this.call("getNftsForCollection", {
+      collection_id: collectionId,
+      limit,
+      offset,
+    });
+  }
+
+  getCollection(collectionId: HexString): Promise<NftCollection> {
+    return this.call("getCollection", { collection_id: collectionId });
+  }
+
+  getAllCollections(
+    limit = 50,
+    offset = 0,
+  ): Promise<AllCollectionsResponse> {
+    return this.call("getAllCollections", { limit, offset });
   }
 
   // ============================================================== Metrics
