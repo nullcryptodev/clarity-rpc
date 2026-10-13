@@ -265,10 +265,25 @@ class Writer {
 // ------------------------------------------------------------- Address
 
 /**
- * Decode a bech32m address to its 32-byte body. The builder doesn't
- * fully validate the checksum — that's a heavier dependency — but it
- * does enforce the HRP and length. Callers who already have the raw
- * bytes should pass `fromBytes`/`toBytes` and skip this path.
+ * The witness version byte that precedes the public key in every
+ * CLRTY address payload. Matches ADDRESS_WITNESS_VERSION in the
+ * C++ WalletTypes.h.
+ */
+const ADDRESS_WITNESS_VERSION = 0x00;
+const ADDRESS_PUBKEY_LENGTH = 32;
+
+/**
+ * Decode a bech32m address to its 32-byte public key body.
+ *
+ * A CLRTY address encodes 33 bytes: a 1-byte witness version
+ * followed by the 32-byte public key. The transaction format uses
+ * only the pubkey, so this function strips the witness version
+ * after validating it.
+ *
+ * The builder doesn't validate the checksum — that's a heavier
+ * dependency — but it does enforce the HRP, the payload length,
+ * and the witness version. Callers who already have the raw bytes
+ * should pass `fromBytes`/`toBytes` and skip this path.
  */
 function decodeBech32m(addr: Bech32mAddress): Uint8Array {
   const sep = addr.lastIndexOf("1");
@@ -286,8 +301,10 @@ function decodeBech32m(addr: Bech32mAddress): Uint8Array {
     if (i < 0) throw new Error(`invalid bech32m char: ${c}`);
     words.push(i);
   }
+  // Drop the 6-word checksum.
   const payload = words.slice(0, -6);
 
+  // Convert 5-bit groups to 8-bit bytes.
   const bytes: number[] = [];
   let acc = 0;
   let bits = 0;
@@ -299,11 +316,21 @@ function decodeBech32m(addr: Bech32mAddress): Uint8Array {
       bytes.push((acc >> bits) & 0xff);
     }
   }
-  const out = new Uint8Array(bytes);
-  if (out.length !== 32) {
-    throw new Error(`bech32m address decodes to ${out.length} bytes, expected 32`);
+
+  const expectedLength = 1 + ADDRESS_PUBKEY_LENGTH;
+  if (bytes.length !== expectedLength) {
+    throw new Error(
+      `bech32m address decodes to ${bytes.length} bytes, expected ${expectedLength}`,
+    );
   }
-  return out;
+  if (bytes[0] !== ADDRESS_WITNESS_VERSION) {
+    throw new Error(
+      `bech32m address has witness version 0x${bytes[0]!.toString(16).padStart(2, "0")}, ` +
+      `expected 0x${ADDRESS_WITNESS_VERSION.toString(16).padStart(2, "0")}`,
+    );
+  }
+
+  return new Uint8Array(bytes.slice(1));
 }
 
 // ------------------------------------------------------------- Constants

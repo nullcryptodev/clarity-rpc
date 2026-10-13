@@ -1,20 +1,40 @@
 import { describe, expect, it } from "vitest";
 import { TxBuilder, UnsignedTx } from "../builder.js";
 
-//  A valid bech32m address must have exactly 52 data characters
-//  after the `1` separator. This helper produces one from a 32-byte
-//  body, so the tests never have to construct (or retype) an address
-//  by hand.
+//  The witness version byte that precedes the public key in every
+//  CLRTY address payload. Matches ADDRESS_WITNESS_VERSION in the
+//  C++ WalletTypes.h and in src/builder.ts.
+const ADDRESS_WITNESS_VERSION = 0x00;
+
+/**
+ * Build a valid bech32m address from a 32-byte body.
+ *
+ * A CLRTY address encodes 33 bytes: [witness_version, body[32]].
+ * That's 264 bits, which packs into 53 5-bit groups (the last one
+ * padded with zeros). Add the 6-word checksum and the total data
+ * length is 59 characters after the `1` separator.
+ *
+ * The checksum is written as six zero words. The builder's decoder
+ * doesn't verify the checksum, so this produces a string the
+ * decoder accepts. If the checksum check is later added, this
+ * helper will need a real checksum implementation.
+ */
 function makeTestAddress(
   hrp: "clrty" | "tclrty" | "rclrty",
   body: Uint8Array = new Uint8Array(32),
 ): string {
   if (body.length !== 32) throw new Error("body must be 32 bytes");
+
+  //  Prepend the witness version byte.
+  const payload = new Uint8Array(1 + 32);
+  payload[0] = ADDRESS_WITNESS_VERSION;
+  payload.set(body, 1);
+
   const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
   const words: number[] = [];
   let acc = 0;
   let bits = 0;
-  for (const b of body) {
+  for (const b of payload) {
     acc = (acc << 8) | b;
     bits += 8;
     while (bits >= 5) {
@@ -23,10 +43,14 @@ function makeTestAddress(
     }
   }
   if (bits > 0) words.push((acc << (5 - bits)) & 0x1f);
-  while (words.length < 52) words.push(0);
-  if (words.length !== 52) {
-    throw new Error(`expected 52 words, got ${words.length}`);
+
+  //  33 bytes → 53 five-bit groups.
+  if (words.length !== 53) {
+    throw new Error(`expected 53 words, got ${words.length}`);
   }
+
+  //  Append the 6-word checksum. Zero words here are a placeholder;
+  //  the decoder accepts them because it doesn't verify the checksum.
   const data = words.concat([0, 0, 0, 0, 0, 0]);
   return hrp + "1" + data.map((w) => CHARSET[w]).join("");
 }
@@ -65,7 +89,7 @@ describe("TxBuilder.transfer", () => {
       from: FROM, to: TO, amount: BigInt(1), fee: BigInt(1),
       nonce: BigInt(0), chainId: BigInt(1),
     });
-    const h = tx.signingHash(); // sync in the corrected builder
+    const h = tx.signingHash();
     expect(h.length).toBe(32);
   });
 
