@@ -104,6 +104,9 @@ export type {
   BuildMintTokenArgs,
   BuildBurnTokenArgs,
   BuildUpdateTokenMetaArgs,
+  BuildBridgeBurnArgs,
+  BuildRegisterBridgeWatcherArgs,
+  BuildUnregisterBridgeWatcherArgs,
   SignerFn,
 } from "./builder.js";
 
@@ -193,6 +196,44 @@ export type {
   RemoveLiquidityArgs,
   CreatePoolArgs,
 } from "./dex-writer.js";
+
+// Bridge
+export { BridgeClient } from "./bridge-client.js";
+export type {
+  ParsedBridgeWithdrawal,
+  ParsedPendingWithdrawal,
+  ParsedBridgeStats,
+  ParsedBridgeEvent,
+  BridgeEventPage,
+} from "./bridge-client.js";
+
+export {
+  paymentIdFor,
+  paymentIdHex,
+  findExistingRelease,
+} from "./bridge-helpers.js";
+export type { ExistingRelease } from "./bridge-helpers.js";
+
+export type {
+  BridgeChainRegistration,
+  BridgeConsumedResponse,
+  BridgeWithdrawal,
+  BridgeWatcher,
+  BridgeWatcherIdResponse,
+  ActiveWatchersResponse,
+  BridgeAttestation,
+  BridgeAttestationsForDepositResponse,
+  BridgeAttestationsPageResponse,
+  BridgeAckAttestation,
+  BridgeAckAttestationsResponse,
+  BridgeAckAttestationsPageResponse,
+  PendingWithdrawal,
+  PendingWithdrawalsResponse,
+  BridgeStats,
+  BridgeEventKind,
+  BridgeEvent,
+  BridgeEventsResponse,
+} from "./bridge-types.js";
 
 // Proofs
 export { verifyProof, decodeProof } from "./proof.js";

@@ -91,6 +91,16 @@ export type TxTypeName =
   | "block_reward"
   | "order_expired"
   | "slash"
+  | "bridge_mint"
+  | "bridge_burn"
+  | "bridge_attest"
+  | "bridge_register_chain"
+  | "bridge_ack_withdrawal"
+  | "bridge_pause"
+  | "bridge_unpause"
+  | "register_bridge_watcher"
+  | "unregister_bridge_watcher"
+  | "bridge_ack_attest"
   | (string & {});
 
 export interface Transaction {

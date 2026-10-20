@@ -619,6 +619,132 @@ export class RpcClient {
     return this.call("getMethods");
   }
 
+  // ============================================================== Bridge
+
+  getBridgeChainRegistration(
+    sourceChainId: HexString,
+  ): Promise<import("./bridge-types.js").BridgeChainRegistration> {
+    return this.call("getBridgeChainRegistration", {
+      source_chain_id: sourceChainId,
+    });
+  }
+
+  getBridgeConsumed(args: {
+    sourceChainId: HexString;
+    sourceTxHash: HashHex;
+    sourceOutputIndex: number;
+  }): Promise<import("./bridge-types.js").BridgeConsumedResponse> {
+    return this.call("getBridgeConsumed", {
+      source_chain_id: args.sourceChainId,
+      source_tx_hash: args.sourceTxHash,
+      source_output_index: args.sourceOutputIndex,
+    });
+  }
+
+  getBridgeWithdrawal(
+    withdrawalId: HexString,
+  ): Promise<import("./bridge-types.js").BridgeWithdrawal> {
+    return this.call("getBridgeWithdrawal", { withdrawal_id: withdrawalId });
+  }
+
+  getActiveWatchers(
+    sourceChainId: HexString,
+    height?: HexString,
+  ): Promise<import("./bridge-types.js").ActiveWatchersResponse> {
+    return this.call("getActiveWatchers", {
+      source_chain_id: sourceChainId,
+      ...(height !== undefined ? { height } : {}),
+    });
+  }
+
+  getBridgeWatcherIdByAddress(
+    address: Bech32mAddress,
+  ): Promise<import("./bridge-types.js").BridgeWatcherIdResponse> {
+    return this.call("getBridgeWatcherIdByAddress", { address });
+  }
+
+  getBridgeAttestations(
+    args:
+      | {
+        sourceChainId: HexString;
+        sourceTxHash: HashHex;
+        sourceOutputIndex: number;
+      }
+      | { limit?: number; offset?: number },
+  ): Promise<
+    | import("./bridge-types.js").BridgeAttestationsForDepositResponse
+    | import("./bridge-types.js").BridgeAttestationsPageResponse
+  > {
+    if ("sourceChainId" in args) {
+      return this.call("getBridgeAttestations", {
+        source_chain_id: args.sourceChainId,
+        source_tx_hash: args.sourceTxHash,
+        source_output_index: args.sourceOutputIndex,
+      });
+    }
+    return this.call("getBridgeAttestations", {
+      ...(args.limit !== undefined ? { limit: args.limit } : {}),
+      ...(args.offset !== undefined ? { offset: args.offset } : {}),
+    });
+  }
+
+  getBridgeAckAttestations(
+    args: { withdrawalId: HexString } | { limit?: number; offset?: number },
+  ): Promise<
+    | import("./bridge-types.js").BridgeAckAttestationsResponse
+    | import("./bridge-types.js").BridgeAckAttestationsPageResponse
+  > {
+    if ("withdrawalId" in args) {
+      return this.call("getBridgeAckAttestations", {
+        withdrawal_id: args.withdrawalId,
+      });
+    }
+    return this.call("getBridgeAckAttestations", {
+      ...(args.limit !== undefined ? { limit: args.limit } : {}),
+      ...(args.offset !== undefined ? { offset: args.offset } : {}),
+    });
+  }
+
+  getPendingWithdrawals(opts?: {
+    fromHeight?: HexString;
+    limit?: number;
+    offset?: number;
+  }): Promise<import("./bridge-types.js").PendingWithdrawalsResponse> {
+    return this.call("getPendingWithdrawals", {
+      ...(opts?.fromHeight !== undefined
+        ? { from_height: opts.fromHeight }
+        : {}),
+      ...(opts?.limit !== undefined ? { limit: opts.limit } : {}),
+      ...(opts?.offset !== undefined ? { offset: opts.offset } : {}),
+    });
+  }
+
+  getBridgeStats(
+    sourceChainId: HexString,
+  ): Promise<import("./bridge-types.js").BridgeStats> {
+    return this.call("getBridgeStats", {
+      source_chain_id: sourceChainId,
+    });
+  }
+
+  getBridgeEvents(opts: {
+    sourceChainId: HexString;
+    fromHeight?: HexString;
+    kind?: "mint" | "burn" | "ack_attest" | "ack_withdrawal";
+    limit?: number;
+    offset?: number;
+  }): Promise<import("./bridge-types.js").BridgeEventsResponse> {
+    return this.call("getBridgeEvents", {
+      source_chain_id: opts.sourceChainId,
+      ...(opts.fromHeight !== undefined
+        ? { from_height: opts.fromHeight }
+        : {}),
+      ...(opts.kind !== undefined ? { kind: opts.kind } : {}),
+      ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
+      ...(opts.offset !== undefined ? { offset: opts.offset } : {}),
+    });
+  }
+
   // ============================================================== ETH shims
 
   web3ClientVersion(): Promise<string> {

@@ -174,6 +174,25 @@ export interface BuildUpdateTokenMetaArgs extends BaseTxArgs {
   newRoyaltyBps?: number;
 }
 
+export interface BuildBridgeBurnArgs extends BaseTxArgs {
+  /** The source chain this burn targets. For CCX, 0x43435831n. */
+  sourceChainId: bigint;
+  /** The 64-byte (spend ‖ view) pubkey pair. */
+  destinationBlob: Uint8Array;
+  /** The base58 form of the same pair. */
+  destinationAddress: string;
+  amount: bigint;
+}
+
+export interface BuildRegisterBridgeWatcherArgs extends BaseTxArgs {
+  sourceChainId: bigint;
+  stake: bigint;
+}
+
+export interface BuildUnregisterBridgeWatcherArgs extends BaseTxArgs {
+  sourceChainId: bigint;
+}
+
 // ------------------------------------------------------------- Signer
 
 /**
@@ -369,6 +388,17 @@ const TYPE_CODES = {
   mint_token: 0x51,
   burn_token: 0x52,
   update_token_meta: 0x53,
+
+  bridge_mint: 0x70,
+  bridge_burn: 0x71,
+  bridge_attest: 0x72,
+  bridge_register_chain: 0x73,
+  bridge_ack_withdrawal: 0x74,
+  bridge_pause: 0x75,
+  bridge_unpause: 0x76,
+  register_bridge_watcher: 0x77,
+  unregister_bridge_watcher: 0x78,
+  bridge_ack_attest: 0x7a,
 
   block_reward: 0xf0,
   order_expired: 0xf1,
@@ -733,6 +763,63 @@ export class TxBuilder {
       },
     );
   }
+
+  static bridgeBurn(args: BuildBridgeBurnArgs): UnsignedTx {
+    if (args.destinationBlob.length !== 64) {
+      throw new Error(
+        `destinationBlob must be 64 bytes, got ${args.destinationBlob.length}`,
+      );
+    }
+    if (args.destinationAddress.length === 0) {
+      throw new Error("destinationAddress must not be empty");
+    }
+    const addrBytes = new TextEncoder().encode(args.destinationAddress);
+    if (addrBytes.length > 255) {
+      throw new Error("destinationAddress exceeds 255 bytes");
+    }
+    return buildTx(
+      "bridge_burn",
+      args,
+      NATIVE_TOKEN_ID,
+      args.amount,
+      undefined,
+      (w) => {
+        w.u64(args.sourceChainId);
+        w.u8Prefixed(args.destinationBlob);
+        w.u8(addrBytes.length).bytes(addrBytes);
+        w.u64(args.amount);
+      },
+    );
+  }
+
+  static registerBridgeWatcher(
+    args: BuildRegisterBridgeWatcherArgs,
+  ): UnsignedTx {
+    return buildTx(
+      "register_bridge_watcher",
+      args,
+      NATIVE_TOKEN_ID,
+      0n,
+      undefined,
+      (w) => {
+        w.u64(args.sourceChainId);
+        w.u64(args.stake);
+      },
+    );
+  }
+
+  static unregisterBridgeWatcher(
+    args: BuildUnregisterBridgeWatcherArgs,
+  ): UnsignedTx {
+    return buildTx(
+      "unregister_bridge_watcher",
+      args,
+      NATIVE_TOKEN_ID,
+      0n,
+      undefined,
+      (w) => w.u64(args.sourceChainId),
+    );
+  }
 }
 
 // ------------------------------------------------------------- Internals
@@ -776,6 +863,7 @@ function buildTx(
 
   return new UnsignedTx(w.toUint8Array(), typeName);
 }
+
 
 // ------------------------------------------------------------- Helpers
 

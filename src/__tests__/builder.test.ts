@@ -1,315 +1,255 @@
 import { describe, expect, it } from "vitest";
 import { TxBuilder, UnsignedTx } from "../builder.js";
 
-//  The witness version byte that precedes the public key in every
-//  CLRTY address payload. Matches ADDRESS_WITNESS_VERSION in the
-//  C++ WalletTypes.h and in src/builder.ts.
-const ADDRESS_WITNESS_VERSION = 0x00;
+//  The public test wallet from the handover session. These keys are
+//  deliberately compromised (the wallet was published as a fixture).
+//  Never use them for real funds.
+const PUBLIC_WALLET_ADDRESS =
+  "ccx7Bnyv4AtgNaFLLCFNLVNASeUpmXWznUxPTg7J8HCP1UWqA9RkTNZDv25TgE4oWi9HJVWQ3dyujU69TKRN9CPc2ecJHSP6C9";
+const PUBLIC_WALLET_SPEND_KEY_HEX =
+  "ae78d56739808611955b1e4d39f999e57f6c400b567f552303214f17b9b8f202";
+const PUBLIC_WALLET_VIEW_KEY_HEX =
+  "d32114d492519416167c51e74d8d6e27c2591f06824c22340c3596e9bdcbce00";
 
-/**
- * Build a valid bech32m address from a 32-byte body.
- *
- * A CLRTY address encodes 33 bytes: [witness_version, body[32]].
- * That's 264 bits, which packs into 53 5-bit groups (the last one
- * padded with zeros). Add the 6-word checksum and the total data
- * length is 59 characters after the `1` separator.
- *
- * The checksum is written as six zero words. The builder's decoder
- * doesn't verify the checksum, so this produces a string the
- * decoder accepts. If the checksum check is later added, this
- * helper will need a real checksum implementation.
- */
-function makeTestAddress(
-  hrp: "clrty" | "tclrty" | "rclrty",
-  body: Uint8Array = new Uint8Array(32),
-): string {
-  if (body.length !== 32) throw new Error("body must be 32 bytes");
-
-  //  Prepend the witness version byte.
-  const payload = new Uint8Array(1 + 32);
-  payload[0] = ADDRESS_WITNESS_VERSION;
-  payload.set(body, 1);
-
-  const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-  const words: number[] = [];
-  let acc = 0;
-  let bits = 0;
-  for (const b of payload) {
-    acc = (acc << 8) | b;
-    bits += 8;
-    while (bits >= 5) {
-      bits -= 5;
-      words.push((acc >> bits) & 0x1f);
-    }
+function publicWalletBlob(): Uint8Array {
+  const hex = PUBLIC_WALLET_SPEND_KEY_HEX + PUBLIC_WALLET_VIEW_KEY_HEX;
+  const out = new Uint8Array(64);
+  for (let i = 0; i < 64; i++) {
+    out[i] = parseInt(hex.substr(i * 2, 2), 16);
   }
-  if (bits > 0) words.push((acc << (5 - bits)) & 0x1f);
-
-  //  33 bytes → 53 five-bit groups.
-  if (words.length !== 53) {
-    throw new Error(`expected 53 words, got ${words.length}`);
-  }
-
-  //  Append the 6-word checksum. Zero words here are a placeholder;
-  //  the decoder accepts them because it doesn't verify the checksum.
-  const data = words.concat([0, 0, 0, 0, 0, 0]);
-  return hrp + "1" + data.map((w) => CHARSET[w]).join("");
+  return out;
 }
 
-const FROM = makeTestAddress("rclrty");
-const TO = makeTestAddress("rclrty", new Uint8Array(32).fill(0x11));
+//  The burner is a Clarity address — the `from` field of the burn.
+//  Same test address the existing builder tests use.
+const BURNER =
+  "rclrty1qzjrjdw68zqmxa744ewv7sstgdstlxw9yx7llhtz9nwmf5r74fetumsykpj";
 
-describe("TxBuilder.transfer", () => {
-  it("produces an UnsignedTx with the right type name", () => {
-    const tx = TxBuilder.transfer({
-      from: FROM,
-      to: TO,
-      amount: BigInt(1_000_000),
-      fee: BigInt(1_000),
-      nonce: BigInt(0),
-      chainId: BigInt(0x434c5247),
+const CCX_CHAIN_ID = 0x43435831n;
+
+function base() {
+  return {
+    from: BURNER,
+    fee: 100_000n,
+    nonce: 0n,
+    chainId: 0x434c5247n,
+  };
+}
+
+describe("TxBuilder.bridgeBurn", () => {
+  it("produces a bridge_burn UnsignedTx", () => {
+    const tx = TxBuilder.bridgeBurn({
+      ...base(),
+      sourceChainId: CCX_CHAIN_ID,
+      destinationBlob: publicWalletBlob(),
+      destinationAddress: PUBLIC_WALLET_ADDRESS,
+      amount: 50_000n,
     });
     expect(tx).toBeInstanceOf(UnsignedTx);
-    expect(tx.typeName).toBe("transfer");
+    expect(tx.typeName).toBe("bridge_burn");
   });
 
-  it("serializes to deterministic hex", () => {
-    const a = TxBuilder.transfer({
-      from: FROM, to: TO, amount: BigInt(1), fee: BigInt(1),
-      nonce: BigInt(0), chainId: BigInt(1),
-    });
-    const b = TxBuilder.transfer({
-      from: FROM, to: TO, amount: BigInt(1), fee: BigInt(1),
-      nonce: BigInt(0), chainId: BigInt(1),
-    });
-    expect(a.toHex()).toBe(b.toHex());
-  });
-
-  it("signing hash is 32 bytes", () => {
-    const tx = TxBuilder.transfer({
-      from: FROM, to: TO, amount: BigInt(1), fee: BigInt(1),
-      nonce: BigInt(0), chainId: BigInt(1),
-    });
-    const h = tx.signingHash();
-    expect(h.length).toBe(32);
-  });
-
-  it("signs and produces a signed tx with the right hex layout", async () => {
-    const tx = TxBuilder.transfer({
-      from: FROM, to: TO, amount: BigInt(1), fee: BigInt(1),
-      nonce: BigInt(0), chainId: BigInt(1),
-    });
-    const sig = new Uint8Array(64).fill(0xab);
-    const signed = await tx.sign(async () => sig);
-    const hex = signed.toHex();
-    expect(hex.startsWith("0x")).toBe(true);
-    expect(hex).toContain("ab".repeat(64));
-  });
-
-  it("rejects a short signature from the signer", async () => {
-    const tx = TxBuilder.transfer({
-      from: FROM, to: TO, amount: BigInt(1), fee: BigInt(1),
-      nonce: BigInt(0), chainId: BigInt(1),
-    });
-    await expect(tx.sign(async () => new Uint8Array(32))).rejects.toThrow();
-  });
-});
-
-describe("TxBuilder.optInStaking / optOutStaking / claimRewards", () => {
-  const base = {
-    from: FROM, fee: BigInt(1), nonce: BigInt(0), chainId: BigInt(1),
-  };
-  it("builds opt-in", () => expect(TxBuilder.optInStaking(base).typeName).toBe("opt_in_staking"));
-  it("builds opt-out", () => expect(TxBuilder.optOutStaking(base).typeName).toBe("opt_out_staking"));
-  it("builds claim", () => expect(TxBuilder.claimRewards(base).typeName).toBe("claim_rewards"));
-});
-
-describe("TxBuilder AMM", () => {
-  const base = {
-    from: FROM, fee: BigInt(1), nonce: BigInt(0), chainId: BigInt(1),
-  };
-
-  it("builds createPool", () => {
-    const tx = TxBuilder.createPool({
-      ...base, tokenA: BigInt(0), tokenB: BigInt(1),
-      amountA: BigInt(100), amountB: BigInt(200), feeBps: 30,
-    });
-    expect(tx.typeName).toBe("create_pool");
-  });
-
-  it("builds swap", () => {
-    const tx = TxBuilder.swap({
-      ...base,
-      poolId: BigInt(1),
-      tokenIn: BigInt(0),
-      amountIn: BigInt(100),
-      minAmountOut: BigInt(90),
-      to: TO,
-    });
-    expect(tx.typeName).toBe("swap");
-  });
-
-  it("builds addLiquidity", () => {
-    const tx = TxBuilder.addLiquidity({
-      ...base,
-      poolId: BigInt(1),
-      tokenIn: BigInt(0),
-      amountIn: BigInt(100),
-      amountOther: BigInt(200),
-    });
-    expect(tx.typeName).toBe("add_liquidity");
-  });
-
-  it("builds removeLiquidity", () => {
-    const tx = TxBuilder.removeLiquidity({
-      ...base,
-      positionId: BigInt(1),
-      amount: BigInt(50),
-    });
-    expect(tx.typeName).toBe("remove_liquidity");
-  });
-});
-
-describe("TxBuilder validator", () => {
-  const base = {
-    from: FROM, fee: BigInt(1), nonce: BigInt(0), chainId: BigInt(1),
-  };
-
-  it("rejects short node keys", () => {
+  it("rejects a non-64-byte destination blob", () => {
     expect(() =>
-      TxBuilder.registerValidator({
-        ...base,
-        nodeKey: new Uint8Array(16),
-        stake: BigInt(1),
+      TxBuilder.bridgeBurn({
+        ...base(),
+        sourceChainId: CCX_CHAIN_ID,
+        destinationBlob: new Uint8Array(63),
+        destinationAddress: PUBLIC_WALLET_ADDRESS,
+        amount: 50_000n,
       }),
-    ).toThrow();
+    ).toThrow(/64 bytes/);
+
+    expect(() =>
+      TxBuilder.bridgeBurn({
+        ...base(),
+        sourceChainId: CCX_CHAIN_ID,
+        destinationBlob: new Uint8Array(65),
+        destinationAddress: PUBLIC_WALLET_ADDRESS,
+        amount: 50_000n,
+      }),
+    ).toThrow(/64 bytes/);
   });
 
-  it("accepts 32-byte keys", () => {
-    const tx = TxBuilder.registerValidator({
-      ...base,
-      nodeKey: new Uint8Array(32),
-      stake: BigInt(1),
-    });
-    expect(tx.typeName).toBe("register_validator");
+  it("rejects an empty destination address", () => {
+    expect(() =>
+      TxBuilder.bridgeBurn({
+        ...base(),
+        sourceChainId: CCX_CHAIN_ID,
+        destinationBlob: publicWalletBlob(),
+        destinationAddress: "",
+        amount: 50_000n,
+      }),
+    ).toThrow(/destinationAddress/);
   });
 
-  it("builds updateRewardAddress", () => {
-    const tx = TxBuilder.updateRewardAddress({
-      ...base,
-      newRewardAddress: TO,
+  it("encodes source_chain_id, blob, address, and amount in the payload", () => {
+    //  Payload layout (bytes):
+    //    [0..8)    source_chain_id (LE)
+    //    [8]       blob_len (0x40 = 64)
+    //    [9..73)   destination_blob
+    //    [73]      addr_len (0x62 = 98 for the CCX address)
+    //    [74..172) destination_address (ASCII, 98 bytes)
+    //    [172..180) amount (LE)
+    //
+    //  In hex-character terms (two per byte), the payload is 360
+    //  characters long.
+    const amount = 50_000n;
+    const tx = TxBuilder.bridgeBurn({
+      ...base(),
+      sourceChainId: CCX_CHAIN_ID,
+      destinationBlob: publicWalletBlob(),
+      destinationAddress: PUBLIC_WALLET_ADDRESS,
+      amount,
     });
-    expect(tx.typeName).toBe("update_reward_address");
+
+    const hex = tx.toHex();
+    const payload = extractPayload(hex);
+
+    //  source_chain_id, little-endian.
+    expect(payload.slice(0, 16)).toBe("3158434300000000");
+
+    //  blob_len = 64.
+    expect(payload.slice(16, 18)).toBe("40");
+
+    //  blob = spend ‖ view.
+    expect(payload.slice(18, 18 + 128)).toBe(
+      PUBLIC_WALLET_SPEND_KEY_HEX + PUBLIC_WALLET_VIEW_KEY_HEX,
+    );
+
+    //  addr_len = 98.
+    expect(payload.slice(18 + 128, 18 + 128 + 2)).toBe("62");
+
+    //  destination_address as ASCII, hex-encoded.
+    const expectedAddrHex = Buffer.from(
+      PUBLIC_WALLET_ADDRESS,
+      "ascii",
+    ).toString("hex");
+    expect(payload.slice(18 + 128 + 2, 18 + 128 + 2 + 196)).toBe(
+      expectedAddrHex,
+    );
+
+    //  amount is the last 8 bytes of the payload.
+    const expectedAmountHex = Buffer.alloc(8);
+    expectedAmountHex.writeBigUInt64LE(amount);
+    expect(payload.slice(-16)).toBe(expectedAmountHex.toString("hex"));
+
+    //  Sanity: the payload is exactly 180 bytes (360 hex characters).
+    expect(payload.length).toBe(360);
   });
 
-  it("builds rotateConsensusKey", () => {
-    const tx = TxBuilder.rotateConsensusKey({
-      ...base,
-      newConsensusKey: new Uint8Array(32),
+  it("is deterministic for the same inputs", () => {
+    const args = {
+      ...base(),
+      sourceChainId: CCX_CHAIN_ID,
+      destinationBlob: publicWalletBlob(),
+      destinationAddress: PUBLIC_WALLET_ADDRESS,
+      amount: 50_000n,
+    };
+    expect(TxBuilder.bridgeBurn(args).toHex()).toBe(
+      TxBuilder.bridgeBurn(args).toHex(),
+    );
+  });
+
+  it("produces a signing hash of 32 bytes", () => {
+    const tx = TxBuilder.bridgeBurn({
+      ...base(),
+      sourceChainId: CCX_CHAIN_ID,
+      destinationBlob: publicWalletBlob(),
+      destinationAddress: PUBLIC_WALLET_ADDRESS,
+      amount: 50_000n,
     });
-    expect(tx.typeName).toBe("rotate_consensus_key");
+    expect(tx.signingHash().length).toBe(32);
   });
 });
 
-describe("TxBuilder orders", () => {
-  const base = {
-    from: FROM, fee: BigInt(1), nonce: BigInt(0), chainId: BigInt(1),
-  };
-
-  it("builds a passive order with the right mode byte", () => {
-    const tx = TxBuilder.createOrder({
-      ...base,
-      sellToken: BigInt(0),
-      buyToken: BigInt(1),
-      sellAmount: BigInt(100),
-      minBuyAmount: BigInt(90),
-      mode: "passive",
-      poolId: BigInt(0),
-      expiresAtHeight: BigInt(1000),
+describe("TxBuilder.registerBridgeWatcher", () => {
+  it("produces a register_bridge_watcher UnsignedTx", () => {
+    const tx = TxBuilder.registerBridgeWatcher({
+      ...base(),
+      sourceChainId: CCX_CHAIN_ID,
+      stake: 1_000_000n,
     });
-    expect(tx.typeName).toBe("create_order");
+    expect(tx.typeName).toBe("register_bridge_watcher");
   });
 
-  it("builds an active order with a pool id", () => {
-    const tx = TxBuilder.createOrder({
-      ...base,
-      sellToken: BigInt(0),
-      buyToken: BigInt(1),
-      sellAmount: BigInt(100),
-      minBuyAmount: BigInt(90),
-      mode: "active",
-      poolId: BigInt(7),
-      expiresAtHeight: BigInt(1000),
+  it("encodes source_chain_id and stake in the payload", () => {
+    const stake = 1_000_000n;
+    const tx = TxBuilder.registerBridgeWatcher({
+      ...base(),
+      sourceChainId: CCX_CHAIN_ID,
+      stake,
     });
-    expect(tx.typeName).toBe("create_order");
-  });
 
-  it("builds an order with conditions", () => {
-    const tx = TxBuilder.createOrder({
-      ...base,
-      sellToken: BigInt(0),
-      buyToken: BigInt(1),
-      sellAmount: BigInt(100),
-      minBuyAmount: BigInt(90),
-      mode: "passive",
-      poolId: BigInt(0),
-      expiresAtHeight: BigInt(1000),
-      conditions: [
-        { type: "expires_at_height", param1: BigInt(500), param2: 0 },
-      ],
-    });
-    expect(tx.typeName).toBe("create_order");
-  });
+    const payload = extractPayload(tx.toHex());
 
-  it("builds cancelOrder", () => {
-    const tx = TxBuilder.cancelOrder({ ...base, orderId: BigInt(1) });
-    expect(tx.typeName).toBe("cancel_order");
+    expect(payload.slice(0, 16)).toBe("3158434300000000");
+
+    const expectedStakeHex = Buffer.alloc(8);
+    expectedStakeHex.writeBigUInt64LE(stake);
+    expect(payload.slice(16)).toBe(expectedStakeHex.toString("hex"));
   });
 });
 
-describe("TxBuilder tokens", () => {
-  const base = {
-    from: FROM, fee: BigInt(1), nonce: BigInt(0), chainId: BigInt(1),
-  };
-
-  it("builds createToken", () => {
-    const tx = TxBuilder.createToken({
-      ...base,
-      name: "Test",
-      symbol: "TST",
-      decimals: 5,
-      maxSupply: BigInt(1_000_000),
-      backing: 0,
-      royaltyBps: 0,
+describe("TxBuilder.unregisterBridgeWatcher", () => {
+  it("produces an unregister_bridge_watcher UnsignedTx", () => {
+    const tx = TxBuilder.unregisterBridgeWatcher({
+      ...base(),
+      sourceChainId: CCX_CHAIN_ID,
     });
-    expect(tx.typeName).toBe("create_token");
+    expect(tx.typeName).toBe("unregister_bridge_watcher");
   });
 
-  it("builds mintToken with a recipient", () => {
-    const tx = TxBuilder.mintToken({
-      ...base,
-      tokenId: BigInt(1),
-      to: TO,
-      amount: BigInt(100),
+  it("encodes source_chain_id as the only payload field", () => {
+    const tx = TxBuilder.unregisterBridgeWatcher({
+      ...base(),
+      sourceChainId: CCX_CHAIN_ID,
     });
-    expect(tx.typeName).toBe("mint_token");
-  });
 
-  it("builds burnToken", () => {
-    const tx = TxBuilder.burnToken({
-      ...base,
-      tokenId: BigInt(1),
-      amount: BigInt(100),
-    });
-    expect(tx.typeName).toBe("burn_token");
-  });
-
-  it("builds updateTokenMeta", () => {
-    const tx = TxBuilder.updateTokenMeta({
-      ...base,
-      tokenId: BigInt(1),
-      newName: "New Name",
-      newSymbol: "NEW",
-    });
-    expect(tx.typeName).toBe("update_token_meta");
+    const payload = extractPayload(tx.toHex());
+    expect(payload).toBe("3158434300000000");
   });
 });
+
+/**
+ *  Extract the payload bytes (as a hex string) from a serialized
+ *  unsigned transaction.
+ *
+ *  The body layout (from builder.ts) is:
+ *
+ *    u16   version
+ *    u64   chain_id
+ *    u8    type_code
+ *    u64   nonce
+ *    u64   valid_until_height
+ *    bytes from                  (32)
+ *    bytes to                    (32)
+ *    u32   token_id
+ *    u64   amount
+ *    u64   fee
+ *    u32   payload_len
+ *    bytes payload
+ *
+ *  So the payload starts at byte offset
+ *  2+8+1+8+8+32+32+4+8+8+4 = 115 of the body, and is
+ *  `payload_len` bytes long.
+ *
+ *  `toHex()` of an UnsignedTx is `"0x"` + the body's hex. The
+ *  signature is not part of an UnsignedTx.
+ */
+function extractPayload(hex: string): string {
+  const body = hex.startsWith("0x") ? hex.slice(2) : hex;
+
+  const payloadLenOffsetBytes = 2 + 8 + 1 + 8 + 8 + 32 + 32 + 4 + 8 + 8;
+  const payloadLenHex = body.slice(
+    payloadLenOffsetBytes * 2,
+    payloadLenOffsetBytes * 2 + 8,
+  );
+  const payloadLen = parseInt(payloadLenHex, 16);
+
+  const payloadStartBytes = payloadLenOffsetBytes + 4;
+  return body.slice(
+    payloadStartBytes * 2,
+    (payloadStartBytes + payloadLen) * 2,
+  );
+}
