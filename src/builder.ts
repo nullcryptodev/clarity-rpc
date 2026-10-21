@@ -820,6 +820,134 @@ export class TxBuilder {
       (w) => w.u64(args.sourceChainId),
     );
   }
+
+  static bridgeRegisterChain(args: BuildBridgeRegisterChainArgs): UnsignedTx {
+    //  Validate the shape before writing, so the caller gets a
+    //  build-time error instead of a mempool rejection.
+    if (args.fingerprint.length !== 32) {
+      throw new Error(
+        `fingerprint must be 32 bytes, got ${args.fingerprint.length}`,
+      );
+    }
+    if (args.signatures.length !== args.signerIndices.length) {
+      throw new Error(
+        "signatures and signerIndices must have the same length",
+      );
+    }
+    if (args.signatures.length === 0) {
+      throw new Error("at least one signature is required");
+    }
+    for (const sig of args.signatures) {
+      if (sig.length !== 64) {
+        throw new Error(
+          `each signature must be 64 bytes, got ${sig.length}`,
+        );
+      }
+    }
+    if (args.sourceDecimals > 18) {
+      throw new Error("sourceDecimals must be <= 18");
+    }
+    if (args.clarityDecimals > 18) {
+      throw new Error("clarityDecimals must be <= 18");
+    }
+
+    return buildTx(
+      "bridge_register_chain",
+      args,
+      NATIVE_TOKEN_ID,
+      0n,
+      undefined,
+      (w) => {
+        //  Serialize BridgeChainRegistration::serializeState(),
+        //  55 bytes, matching Core::BridgeChainRegistration.
+        //
+        //    [8]  source_chain_id LE
+        //    [4]  wrapped_token_id LE
+        //    [32] fingerprint
+        //    [1]  source_decimals
+        //    [1]  clarity_decimals
+        //    [2]  confirmation_depth LE
+        //    [1]  destination_blob_min_len
+        //    [1]  destination_blob_max_len
+        //    [1]  enabled (0 or 1)
+        //    [4]  active_watcher_min LE
+        const regWriter = new Writer();
+        regWriter.u64(args.sourceChainId);
+        regWriter.u32(args.wrappedTokenId);
+        regWriter.bytes(args.fingerprint);
+        regWriter.u8(args.sourceDecimals);
+        regWriter.u8(args.clarityDecimals);
+        regWriter.u16(args.confirmationDepth);
+        regWriter.u8(args.destinationBlobMinLen);
+        regWriter.u8(args.destinationBlobMaxLen);
+        regWriter.u8(args.enabled ? 1 : 0);
+        regWriter.u32(args.activeWatcherMin);
+        const regBytes = regWriter.toUint8Array();
+
+        if (regBytes.length !== 55) {
+          throw new Error(
+            `registration serializes to ${regBytes.length} bytes, expected 55`,
+          );
+        }
+
+        //  Payload: [1] reg_len || [N] reg_blob
+        //           || [2] count || N * ([2] idx LE || [64] sig)
+        w.u8(regBytes.length);
+        w.bytes(regBytes);
+
+        w.u16(args.signatures.length);
+        for (let i = 0; i < args.signatures.length; i++) {
+          const idx = args.signerIndices[i];
+          const sig = args.signatures[i];
+          if (idx === undefined || sig === undefined) {
+            throw new Error("signatures and signerIndices must have the same length");
+          }
+          if (idx < 0 || idx > 0xffff) {
+            throw new Error(`signer index ${idx} out of range`);
+          }
+          w.u16(idx);
+          w.bytes(sig);
+        }
+      },
+    );
+  }
+}
+
+export interface BuildBridgeRegisterChainArgs extends BaseTxArgs {
+  /**
+   * The registration fields as they will be stored. `wrappedTokenId`
+   * must be a free token id — the chain has no "allocate for me"
+   * sentinel (`BridgeChainRegistration::isWellFormed` rejects
+   * `wrapped_token_id == 0`), and the executor honours the value:
+   * an existing token at this id is adopted (wCCX's case), and a
+   * free id gets a new token created there (wBTC's case).
+   *
+   * On regtest the next free id is `2` after CLRTY (0) and wCCX (1),
+   * so a wBTC registration uses `wrappedTokenId: 2`.
+   */
+  sourceChainId: bigint;
+  wrappedTokenId: number;
+  /** 32-byte commitment to (chain_id, asset_id). */
+  fingerprint: Uint8Array;
+  sourceDecimals: number;
+  clarityDecimals: number;
+  confirmationDepth: number;
+  destinationBlobMinLen: number;
+  destinationBlobMaxLen: number;
+  enabled: boolean;
+  activeWatcherMin: number;
+
+  /**
+   * Governance signature block. The signatures are over
+   * `Blake2b("brgr" || serializeState(registration))`, and
+   * `signerIndices` are the position of each signer in the
+   * sorted active validator set at the transaction's height.
+   *
+   * On regtest with two seeds and `bftQuorum(2) = 2`, both seeds
+   * sign with indices 0 and 1.
+   */
+  signerIndices: number[];
+  signatures: Uint8Array[];
 }
 
 // ------------------------------------------------------------- Internals

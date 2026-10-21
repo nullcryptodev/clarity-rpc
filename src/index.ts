@@ -107,8 +107,23 @@ export type {
   BuildBridgeBurnArgs,
   BuildRegisterBridgeWatcherArgs,
   BuildUnregisterBridgeWatcherArgs,
+  BuildBridgeRegisterChainArgs,
   SignerFn,
 } from "./builder.js";
+
+// Bridge write path
+export {
+  submitBridgeRegisterChain,
+  submitRegisterBridgeWatcher,
+  submitUnregisterBridgeWatcher,
+  submitBridgeBurn,
+} from "./bridge-writer.js";
+export type {
+  BridgeRegisterChainArgs,
+  RegisterBridgeWatcherArgs,
+  UnregisterBridgeWatcherArgs,
+  BridgeBurnArgs,
+} from "./bridge-writer.js";
 
 // DEX
 export {
