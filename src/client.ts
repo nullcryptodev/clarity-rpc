@@ -11,6 +11,9 @@ import { HttpTransport } from "./transport-http.js";
 import type { RpcTransport } from "./transport.js";
 import type {
   Account,
+  AmmFarmAccrualRaw,
+  AmmFarmScheduleRaw,
+  AmmFarmStatsRaw,
   AmmPool,
   AmmPosition,
   Bech32mAddress,
@@ -475,6 +478,51 @@ export class RpcClient {
     limit = 50,
   ): Promise<PositionsForPoolResponse> {
     return this.call("getPositionsForPool", { pool_id: poolId, limit });
+  }
+
+  // ---- AMM farming -------------------------------------------------
+
+  getAmmFarm(poolId: HexString): Promise<AmmFarmScheduleRaw> {
+    return this.call("getAmmFarm", { pool_id: poolId });
+  }
+
+  getAllAmmFarms(
+    limit = 50,
+    offset = 0,
+  ): Promise<{
+    count: HexString;
+    offset: HexString;
+    limit: HexString;
+    total: HexString;
+    farms: AmmFarmScheduleRaw[];
+  }> {
+    return this.call("getAllAmmFarms", { limit, offset });
+  }
+
+  getAmmFarmAccrual(
+    poolId: HexString,
+    positionId: HexString,
+  ): Promise<AmmFarmAccrualRaw> {
+    return this.call("getAmmFarmAccrual", {
+      pool_id: poolId,
+      position_id: positionId,
+    });
+  }
+
+  getAmmPositionAccrualsForOwner(
+    address: Bech32mAddress,
+    limit = 100,
+  ): Promise<{
+    address: Bech32mAddress;
+    count: HexString;
+    limit: HexString;
+    accruals: AmmFarmAccrualRaw[];
+  }> {
+    return this.call("getAmmPositionAccrualsForOwner", { address, limit });
+  }
+
+  getAmmFarmStats(): Promise<AmmFarmStatsRaw> {
+    return this.call("getAmmFarmStats");
   }
 
   // ============================================================== Orders

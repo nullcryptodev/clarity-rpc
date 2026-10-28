@@ -65,6 +65,13 @@ const FALLBACK_METHODS: Record<string, string[]> = {
     "ping", "status", "health", "getPeers", "getConfig", "getMethods",
     "web3_clientVersion", "net_version", "net_peerCount", "net_listening",
   ],
+  amm_farming: [
+    "getAmmFarm",
+    "getAllAmmFarms",
+    "getAmmFarmAccrual",
+    "getAmmPositionAccrualsForOwner",
+    "getAmmFarmStats",
+  ],
 };
 
 export async function probeCapabilities(

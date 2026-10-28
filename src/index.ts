@@ -108,6 +108,12 @@ export type {
   BuildRegisterBridgeWatcherArgs,
   BuildUnregisterBridgeWatcherArgs,
   BuildBridgeRegisterChainArgs,
+  BuildCreateAmmFarmArgs,
+  BuildUpdateAmmFarmArgs,
+  BuildPauseAmmFarmArgs,
+  BuildRefillAmmFarmArgs,
+  BuildCloseAmmFarmArgs,
+  BuildClaimAmmFarmRewardsArgs,
   SignerFn,
 } from "./builder.js";
 
@@ -257,3 +263,51 @@ export type { VerifyProofOptions } from "./proof.js";
 // Capabilities
 export { probeCapabilities, hasMethod } from "./capabilities.js";
 export type { Capabilities } from "./capabilities.js";
+
+// AMM farming
+export { FarmClient } from "./farm-client.js";
+export type { FarmPage } from "./farm-client.js";
+
+export {
+  FARM_RPS_SCALE,
+  parseFarm,
+  parseFarmAccrual,
+  parseFarmStats,
+} from "./farm-types.js";
+export type {
+  ParsedAmmFarm,
+  ParsedAmmFarmAccrual,
+  ParsedAmmFarmStats,
+  ParsedAmmFarmEscrowByToken,
+} from "./farm-types.js";
+
+export {
+  computeAccruedRewards,
+  epochsRemaining,
+  isFarmActive,
+  formatFarm,
+  formatAccrual,
+  formatFarmStats,
+} from "./farm-helpers.js";
+export type {
+  FarmDisplay,
+  AccrualDisplay,
+  FarmStatsDisplay,
+} from "./farm-helpers.js";
+
+export {
+  submitCreateAmmFarm,
+  submitUpdateAmmFarm,
+  submitPauseAmmFarm,
+  submitRefillAmmFarm,
+  submitCloseAmmFarm,
+  submitClaimAmmFarmRewards,
+} from "./farm-writer.js";
+export type {
+  CreateAmmFarmArgs,
+  UpdateAmmFarmArgs,
+  PauseAmmFarmArgs,
+  RefillAmmFarmArgs,
+  CloseAmmFarmArgs,
+  ClaimAmmFarmRewardsArgs,
+} from "./farm-writer.js";

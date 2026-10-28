@@ -101,6 +101,12 @@ export type TxTypeName =
   | "register_bridge_watcher"
   | "unregister_bridge_watcher"
   | "bridge_ack_attest"
+  | "create_amm_farm"
+  | "update_amm_farm"
+  | "pause_amm_farm"
+  | "refill_amm_farm"
+  | "close_amm_farm"
+  | "claim_amm_farm_rewards"
   | (string & {});
 
 export interface Transaction {
@@ -400,4 +406,79 @@ export interface Fill {
   price: HexString;
   height: HexString;
   tx_index_in_block: number;
+}
+
+// --------------------------------------------------------------- AMM farming
+
+/**
+ * A farm schedule attached to an AMM pool. One farm per pool.
+ *
+ * The C++ `AmmFarmSchedule` record, serialized as `0x...`-prefixed
+ * hex for every numeric field, and Bech32m for `creator`.
+ *
+ * `rps_per_share` is the accumulator: an LP's unclaimed accrual is
+ * `(current_rps - position_last_rps) * liquidity / FARM_RPS_SCALE`.
+ * Consumers should call `computeAccruedRewards` rather than doing
+ * this arithmetic themselves.
+ */
+export interface AmmFarmScheduleRaw {
+  pool_id: HexString;
+  creator: Bech32mAddress;
+  /** "0x0" means CLRTY; otherwise a user token. */
+  reward_token_id: HexString;
+  reward_rate_per_epoch: HexString;
+  /** Cache of the on-chain custody balance. May lag if a node is behind. */
+  reward_escrow_remaining: HexString;
+  reward_paused: boolean;
+  rps_per_share: HexString;
+  created_at_height: HexString;
+
+  // ---- Derived by the node at read time ----
+
+  /** Authoritative balance at the custody address. */
+  reward_escrow_balance: HexString;
+  /** Current pool total_liquidity, or "0x0" if the pool was deleted. */
+  pool_total_liquidity: HexString;
+  /** `!paused && rate > 0 && escrow > 0`. */
+  is_active: boolean;
+  /** `escrow / rate_per_epoch`, floored. Zero when rate is zero. */
+  epochs_remaining: HexString;
+  /** The farm's escrow custody address, so a client can `getBalance` it. */
+  escrow_address: Bech32mAddress;
+}
+
+/**
+ * A single position's accrual against a single farm.
+ *
+ * The `exists` flag distinguishes "never settled, earning since the
+ * farm existed" (last_rps = 0) from "the companion record is present
+ * but zero" — they happen to mean the same thing arithmetically, but
+ * a UI may want to render them differently. `accrued_unclaimed` is
+ * computed by the node from the position's current liquidity and
+ * what `claim_amm_farm_rewards` would credit if called now.
+ */
+export interface AmmFarmAccrualRaw {
+  pool_id: HexString;
+  position_id: HexString;
+  position_liquidity: HexString;
+  reward_token_id: HexString;
+  exists: boolean;
+  last_rps: HexString;
+  current_rps: HexString;
+  accrued_unclaimed: HexString;
+  farm_paused: boolean;
+}
+
+/** One row of `getAmmFarmStats`'s per-token escrow breakdown. */
+export interface AmmFarmEscrowByTokenRaw {
+  token_id: HexString;
+  escrow_total: HexString;
+}
+
+export interface AmmFarmStatsRaw {
+  height: HexString;
+  total_farms: HexString;
+  active_farms: HexString;
+  paused_farms: HexString;
+  escrow_by_token: AmmFarmEscrowByTokenRaw[];
 }

@@ -400,6 +400,13 @@ const TYPE_CODES = {
   unregister_bridge_watcher: 0x78,
   bridge_ack_attest: 0x7a,
 
+  create_amm_farm: 0x80,
+  update_amm_farm: 0x81,
+  pause_amm_farm: 0x82,
+  refill_amm_farm: 0x83,
+  close_amm_farm: 0x84,
+  claim_amm_farm_rewards: 0x85,
+
   block_reward: 0xf0,
   order_expired: 0xf1,
   slash: 0xf2,
@@ -911,6 +918,91 @@ export class TxBuilder {
       },
     );
   }
+
+  // ---- AMM farming ---------------------------------------------------
+  //
+  //  Payload layouts match the executor:
+  //    create_amm_farm:          u64 pool_id + u32 reward_token_id
+  //                              + u64 rate_per_epoch + u64 escrow
+  //    update_amm_farm:          u64 pool_id + u64 new_rate_per_epoch
+  //    pause_amm_farm:           u64 pool_id
+  //    refill_amm_farm:          u64 pool_id + u64 amount
+  //    close_amm_farm:           u64 pool_id
+  //    claim_amm_farm_rewards:   (empty)
+
+  static createAmmFarm(args: BuildCreateAmmFarmArgs): UnsignedTx {
+    return buildTx(
+      "create_amm_farm",
+      args,
+      NATIVE_TOKEN_ID,
+      0n,
+      undefined,
+      (w) => {
+        w.u64(args.poolId);
+        w.u32(args.rewardTokenId);
+        w.u64(args.rewardRatePerEpoch);
+        w.u64(args.rewardEscrowAmount);
+      },
+    );
+  }
+
+  static updateAmmFarm(args: BuildUpdateAmmFarmArgs): UnsignedTx {
+    return buildTx(
+      "update_amm_farm",
+      args,
+      NATIVE_TOKEN_ID,
+      0n,
+      undefined,
+      (w) => {
+        w.u64(args.poolId);
+        w.u64(args.newRatePerEpoch);
+      },
+    );
+  }
+
+  static pauseAmmFarm(args: BuildPauseAmmFarmArgs): UnsignedTx {
+    return buildTx(
+      "pause_amm_farm",
+      args,
+      NATIVE_TOKEN_ID,
+      0n,
+      undefined,
+      (w) => {
+        w.u64(args.poolId);
+      },
+    );
+  }
+
+  static refillAmmFarm(args: BuildRefillAmmFarmArgs): UnsignedTx {
+    return buildTx(
+      "refill_amm_farm",
+      args,
+      NATIVE_TOKEN_ID,
+      0n,
+      undefined,
+      (w) => {
+        w.u64(args.poolId);
+        w.u64(args.amount);
+      },
+    );
+  }
+
+  static closeAmmFarm(args: BuildCloseAmmFarmArgs): UnsignedTx {
+    return buildTx(
+      "close_amm_farm",
+      args,
+      NATIVE_TOKEN_ID,
+      0n,
+      undefined,
+      (w) => {
+        w.u64(args.poolId);
+      },
+    );
+  }
+
+  static claimAmmFarmRewards(args: BuildClaimAmmFarmRewardsArgs): UnsignedTx {
+    return buildTx("claim_amm_farm_rewards", args, NATIVE_TOKEN_ID, 0n);
+  }
 }
 
 export interface BuildBridgeRegisterChainArgs extends BaseTxArgs {
@@ -949,6 +1041,35 @@ export interface BuildBridgeRegisterChainArgs extends BaseTxArgs {
   signerIndices: number[];
   signatures: Uint8Array[];
 }
+
+// ---- AMM farming ----
+
+export interface BuildCreateAmmFarmArgs extends BaseTxArgs {
+  poolId: bigint;
+  rewardTokenId: bigint;
+  rewardRatePerEpoch: bigint;
+  rewardEscrowAmount: bigint;
+}
+
+export interface BuildUpdateAmmFarmArgs extends BaseTxArgs {
+  poolId: bigint;
+  newRatePerEpoch: bigint;
+}
+
+export interface BuildPauseAmmFarmArgs extends BaseTxArgs {
+  poolId: bigint;
+}
+
+export interface BuildRefillAmmFarmArgs extends BaseTxArgs {
+  poolId: bigint;
+  amount: bigint;
+}
+
+export interface BuildCloseAmmFarmArgs extends BaseTxArgs {
+  poolId: bigint;
+}
+
+export interface BuildClaimAmmFarmRewardsArgs extends BaseTxArgs { }
 
 // ------------------------------------------------------------- Internals
 
