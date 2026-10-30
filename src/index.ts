@@ -128,7 +128,6 @@ export type {
   BridgeRegisterChainArgs,
   RegisterBridgeWatcherArgs,
   UnregisterBridgeWatcherArgs,
-  BridgeBurnArgs,
 } from "./bridge-writer.js";
 
 // DEX

@@ -27,7 +27,7 @@
 
 import type { RpcClient } from "./client.js";
 import type { HashHex } from "./types.js";
-import type { SignerFn } from "./builder.js";
+import type { BuildBridgeBurnArgs, SignerFn } from "./builder.js";
 import { TxBuilder } from "./builder.js";
 import type { WriteOptions, SubmitOptions, SubmitResult } from "./dex-writer.js";
 
@@ -242,38 +242,10 @@ async function pollForReceipt(
 
 // =============================================================== Burn
 
-export interface BridgeBurnArgs {
-  /** The source chain this burn targets. CCX is 0x43435831n, BTC is 0x42544331n. */
-  sourceChainId: bigint;
-  /**
-   * The 64-byte (spend ‖ view) destination blob, exactly as the
-   * chain stores it. For CCX that's the pair of 32-byte public
-   * keys; for a scriptPubKey chain (Bitcoin) it's the scriptPubKey
-   * bytes. The chain's `BridgeBurn` executor validates the length
-   * against `destination_blob_min_len` / `_max_len` from the
-   * registration, and the destination address is the string form
-   * the release path will hand to the source chain.
-   *
-   * If you have the destination address as a string, the adapter
-   * on the daemon side is the one that knows the decode; the
-   * webwallet needs both fields because the chain records both
-   * verbatim. For CCX the blob is `base58_decode(spend ‖ view)`
-   * minus the prefix and checksum; the wallet's address decoder
-   * exposes that as a helper (see `decodeDestinationBlob` in
-   * bridge-helpers.ts — if it doesn't exist yet, that's the
-   * small follow-up).
-   */
-  destinationBlob: Uint8Array;
-  /** The string form of the same destination. */
-  destinationAddress: string;
-  /** Amount in Clarity atomic units. */
-  amount: bigint;
-}
-
 export async function submitBridgeBurn(
   rpc: RpcClient,
   opts: WriteOptions,
-  args: BridgeBurnArgs,
+  args: BuildBridgeBurnArgs,
   submit?: SubmitOptions,
 ): Promise<SubmitResult> {
   //  Client-side validation before the network call. The chain

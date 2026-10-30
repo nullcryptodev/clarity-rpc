@@ -175,12 +175,36 @@ export interface BuildUpdateTokenMetaArgs extends BaseTxArgs {
 }
 
 export interface BuildBridgeBurnArgs extends BaseTxArgs {
-  /** The source chain this burn targets. For CCX, 0x43435831n. */
+  /** The source chain this burn targets. BTC = 0x42544331n, CCX = 0x43435831n. */
   sourceChainId: bigint;
-  /** The 64-byte (spend ‖ view) pubkey pair. */
+
+  /**
+   * The destination in the *byte form the release path executes
+   * against*. Per chain:
+   *
+   *   CCX: 64 bytes (spend pubkey ‖ view pubkey), base58-encoded
+   *        as `destinationAddress`. Address form: `ccx7…`.
+   *
+   *   BTC: the scriptPubKey of `destinationAddress`. For a `tb1q…`
+   *        P2WPKH address, that's 22 bytes: `0x00 0x14` followed
+   *        by the 20-byte witness program. For P2TR, 34 bytes:
+   *        `0x51 0x20` + 32-byte x-only key. NOT the ASCII bytes
+   *        of the bech32 string — those are the `destinationAddress`
+   *        field.
+   *
+   * The `destinationAddress` is always the human-readable form of
+   * the same destination; it goes on the withdrawal record so an
+   * operator can read "this burn was for <address>".
+   */
   destinationBlob: Uint8Array;
-  /** The base58 form of the same pair. */
+
+  /**
+   * The human-readable form: base58 for CCX, bech32 for BTC.
+   * Stored on the withdrawal record. Not used to build the
+   * release transaction; `destinationBlob` is.
+   */
   destinationAddress: string;
+
   amount: bigint;
 }
 
@@ -772,9 +796,22 @@ export class TxBuilder {
   }
 
   static bridgeBurn(args: BuildBridgeBurnArgs): UnsignedTx {
-    if (args.destinationBlob.length !== 64) {
+    const BTC_CHAIN_ID = 0x42544331n;
+    const CCX_CHAIN_ID = 0x43435831n;
+
+    if (args.sourceChainId === BTC_CHAIN_ID) {
+      // Bitcoin: destinationBlob is a scriptPubKey.
+      validateBitcoinScriptPubKey(args.destinationBlob);
+    } else if (args.sourceChainId === CCX_CHAIN_ID) {
+      if (args.destinationBlob.length !== 64) {
+        throw new Error(
+          `CCX destinationBlob must be 64 bytes (spend ‖ view), ` +
+          `got ${args.destinationBlob.length}`,
+        );
+      }
+    } else {
       throw new Error(
-        `destinationBlob must be 64 bytes, got ${args.destinationBlob.length}`,
+        `unknown source chain 0x${args.sourceChainId.toString(16)}`,
       );
     }
     if (args.destinationAddress.length === 0) {
@@ -1120,4 +1157,27 @@ function bytesToHex(b: Uint8Array): HexString {
   let s = "0x";
   for (const x of b) s += x.toString(16).padStart(2, "0");
   return s;
+}
+
+function validateBitcoinScriptPubKey(b: Uint8Array): void {
+  const n = b.length;
+  const ok =
+    (n === 22 && b[0] === 0x00 && b[1] === 0x14) ||                 // P2WPKH
+    (n === 23 && b[0] === 0xa9 && b[1] === 0x14 && b[22] === 0x87) || // P2SH
+    (n === 25 && b[0] === 0x76 && b[1] === 0xa9 && b[2] === 0x14 &&
+      b[23] === 0x88 && b[24] === 0xac) ||                           // P2PKH
+    (n === 34 && b[0] === 0x51 && b[1] === 0x20);                   // P2TR
+
+  if (!ok) {
+    throw new Error(
+      `Bitcoin destinationBlob must be a supported scriptPubKey: ` +
+      `P2WPKH (22B 0x0014…), P2SH (23B 0xa914…87), ` +
+      `P2PKH (25B 0x76a914…88ac), or P2TR (34B 0x5120…). ` +
+      `Got ${n} bytes starting with ` +
+      (n >= 2
+        ? `0x${b[0]!.toString(16).padStart(2, "0")}${b[1]!.toString(16).padStart(2, "0")}`
+        : "(too short)") +
+      `. Pass the scriptPubKey bytes, not the bech32 string.`,
+    );
+  }
 }
